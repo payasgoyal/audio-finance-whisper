@@ -1,15 +1,12 @@
-
 import React, { useState, useRef } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Upload, Play, Square, Pause, CheckCircle, XCircle, RefreshCw, Copy, ExternalLink, Settings } from "lucide-react";
+import { Mic, MicOff, Upload, Play, Square, Pause, CheckCircle, XCircle, RefreshCw, Copy, ExternalLink } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "@/components/ui/sonner";
 import AudioRecorder from "@/components/AudioRecorder";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import AwsCredentialsForm from "@/components/AwsCredentialsForm";
-import useAwsCredentials from "@/hooks/useAwsCredentials";
 
 const Index = () => {
   const isMobile = useIsMobile();
@@ -20,11 +17,7 @@ const Index = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [showCredentialsForm, setShowCredentialsForm] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  
-  // Use our AWS credentials hook
-  const { credentials, saveCredentials, hasCredentials, clearCredentials } = useAwsCredentials();
 
   const handleAudioRecorded = (blob: Blob) => {
     setAudioBlob(blob);
@@ -60,15 +53,6 @@ const Index = () => {
       return;
     }
 
-    // Check if we have AWS credentials
-    if (!credentials) {
-      toast.error("AWS credentials are required", {
-        description: "Please set up your AWS credentials first"
-      });
-      setShowCredentialsForm(true);
-      return;
-    }
-
     setIsUploading(true);
     try {
       // Import AWS S3 upload functions
@@ -79,9 +63,9 @@ const Index = () => {
       setUploadProgress(10); // Show some initial progress
       
       const testResult = await testAwsConnection({
-        accessKeyId: credentials.accessKeyId,
-        secretAccessKey: credentials.secretAccessKey,
-        region: credentials.region
+        accessKeyId: 'AKIAWH2QMV5DRJRFD255',
+        secretAccessKey: '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',
+        region: 'us-west-2'
       });
       
       if (!testResult.success) {
@@ -103,16 +87,12 @@ const Index = () => {
         setUploadProgress(scaledProgress);
       };
       
-      // Use the credentials from our hook
       console.log("Uploading to AWS S3...");
       const publicUrl = await uploadToS3WithProgress(
         audioBlob,
         fileName,
         'audio/wav',
-        {
-          accessKeyId: credentials.accessKeyId,
-          secretAccessKey: credentials.secretAccessKey
-        },
+        null, // No need to pass credentials as they're hardcoded in s3client.ts
         handleProgress
       );
       
@@ -150,16 +130,6 @@ const Index = () => {
     } finally {
       setIsUploading(false);
     }
-  };
-  
-  const handleSaveCredentials = (newCredentials: { accessKeyId: string; secretAccessKey: string; region: string }) => {
-    saveCredentials(newCredentials);
-    setShowCredentialsForm(false);
-    
-    // We'll use the region when we create the S3 client during upload
-    console.log(`AWS region set to: ${newCredentials.region}`);
-    
-    toast.success("AWS credentials saved successfully");
   };
 
   const handlePauseRecording = () => {
@@ -237,81 +207,57 @@ const Index = () => {
                 </ul>
               </nav>
             )}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-white hover:bg-white/20"
-              onClick={() => setShowCredentialsForm(true)}
-              title="AWS Settings"
-            >
-              <Settings className="h-5 w-5" />
-            </Button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="flex-grow flex items-center justify-center p-4">
-        {showCredentialsForm ? (
-          <AwsCredentialsForm 
-            onSave={handleSaveCredentials} 
-            onCancel={() => setShowCredentialsForm(false)} 
-          />
-        ) : (
-          <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Left Content */}
-            <div className="flex flex-col justify-center">
-              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">YOUR OWN PERSONAL FINANCE CHATBOT</h2>
-              <p className="text-white/90 mb-8">
-                Record your personal financial transactions by recording an audio and let our AI analyze your financial habits.
-                Just speak for up to 10 seconds and our system will process your audio.
-              </p>
-              {!hasCredentials && (
-                <Button 
-                  onClick={() => setShowCredentialsForm(true)}
-                  className="bg-white text-[#6152f9] hover:bg-white/90 w-fit"
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  Set Up AWS Credentials
-                </Button>
-              )}
-            </div>
+        <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Left Content */}
+          <div className="flex flex-col justify-center">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">YOUR OWN PERSONAL FINANCE CHATBOT</h2>
+            <p className="text-white/90 mb-8">
+              Record your personal financial transactions by recording an audio and let our AI analyze your financial habits.
+              Just speak for up to 10 seconds and our system will process your audio.
+            </p>
+          </div>
 
-            {/* Right Content - Audio Recorder Card */}
-            <div>
-              <Card className={cn(
-                "backdrop-blur-xl bg-white/90 shadow-xl transition-all",
-                isRecording && !isPaused && "ring-4 ring-red-500",
-                isPaused && "ring-4 ring-yellow-500"
-              )}>
-                <CardHeader>
-                  <CardTitle className="text-center text-[#6152f9]">Voice Your Financial Needs</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-col items-center justify-center gap-6">
-                    <div className="h-32 w-32 rounded-full flex items-center justify-center bg-gradient-to-r from-[#6152f9] to-[#3e30b7] text-white">
-                      {isRecording ? (
-                        isPaused ? <Mic size={48} /> : <MicOff size={48} className="animate-pulse" />
-                      ) : (
-                        <Mic size={48} />
-                      )}
-                    </div>
-                    
-                    {audioBlob && (
-                      <div className="w-full flex justify-center">
-                        <audio ref={audioRef} className="hidden" />
-                        <Button 
-                          onClick={playRecording} 
-                          variant="outline"
-                          className="flex items-center gap-2"
-                        >
-                          {isPlaying ? <Square /> : <Play />}
-                          {isPlaying ? "Stop" : "Play Recording"}
-                        </Button>
-                      </div>
+          {/* Right Content - Audio Recorder Card */}
+          <div>
+            <Card className={cn(
+              "backdrop-blur-xl bg-white/90 shadow-xl transition-all",
+              isRecording && !isPaused && "ring-4 ring-red-500",
+              isPaused && "ring-4 ring-yellow-500"
+            )}>
+              <CardHeader>
+                <CardTitle className="text-center text-[#6152f9]">Voice Your Financial Needs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col items-center justify-center gap-6">
+                  <div className="h-32 w-32 rounded-full flex items-center justify-center bg-gradient-to-r from-[#6152f9] to-[#3e30b7] text-white">
+                    {isRecording ? (
+                      isPaused ? <Mic size={48} /> : <MicOff size={48} className="animate-pulse" />
+                    ) : (
+                      <Mic size={48} />
                     )}
-                    
-                                      {/* Show uploaded file URL */}
+                  </div>
+                  
+                  {audioBlob && (
+                    <div className="w-full flex justify-center">
+                      <audio ref={audioRef} className="hidden" />
+                      <Button 
+                        onClick={playRecording} 
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        {isPlaying ? <Square /> : <Play />}
+                        {isPlaying ? "Stop" : "Play Recording"}
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Show uploaded file URL */}
                   {uploadedFileUrl && (
                     <div className="w-full flex flex-col gap-2">
                       <p className="text-sm text-gray-500 font-medium">File uploaded successfully:</p>
@@ -335,112 +281,111 @@ const Index = () => {
                       </p>
                     </div>
                   )}
-                    
-                    <AudioRecorder
-                      isRecording={isRecording}
-                      setIsRecording={setIsRecording}
-                      onRecordingComplete={handleAudioRecorded}
-                      maxRecordingTime={10000}
-                      isPaused={isPaused}
-                    />
+                  
+                  <AudioRecorder
+                    isRecording={isRecording}
+                    setIsRecording={setIsRecording}
+                    onRecordingComplete={handleAudioRecorded}
+                    maxRecordingTime={10000}
+                    isPaused={isPaused}
+                  />
 
-                    {/* Recording Controls */}
-                    {isRecording && (
-                      <div className="w-full flex justify-center gap-2">
-                        {isPaused ? (
-                          <Button 
-                            onClick={handleResumeRecording}
-                            variant="outline" 
-                            className="flex items-center gap-1"
-                          >
-                            <Mic className="h-4 w-4" />
-                            Resume
-                          </Button>
-                        ) : (
-                          <Button 
-                            onClick={handlePauseRecording}
-                            variant="outline"
-                            className="flex items-center gap-1"
-                          >
-                            <Pause className="h-4 w-4" />
-                            Pause
-                          </Button>
-                        )}
+                  {/* Recording Controls */}
+                  {isRecording && (
+                    <div className="w-full flex justify-center gap-2">
+                      {isPaused ? (
                         <Button 
-                          onClick={handleCompleteRecording}
-                          variant="outline"
-                          className="flex items-center gap-1 bg-green-100 hover:bg-green-200"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                          Complete
-                        </Button>
-                        <Button 
-                          onClick={handleCancelRecording}
+                          onClick={handleResumeRecording}
                           variant="outline" 
-                          className="flex items-center gap-1 bg-red-100 hover:bg-red-200"
+                          className="flex items-center gap-1"
                         >
-                          <XCircle className="h-4 w-4" />
-                          Cancel
+                          <Mic className="h-4 w-4" />
+                          Resume
                         </Button>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <div className="w-full flex justify-center gap-2">
-                    {!isRecording && (
-                      <>
-                        {!audioBlob ? (
-                          <Button 
-                            onClick={() => setIsRecording(true)}
-                            className="bg-[#6152f9] hover:bg-[#3e30b7]"
-                          >
-                            <Mic className="mr-2" />
-                            Start Recording
-                          </Button>
-                        ) : (
-                          <>
-                            {isUploading && (
-                              <div className="w-full mb-2">
-                                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                  <div 
-                                    className="bg-[#6152f9] h-2.5 rounded-full transition-all duration-300" 
-                                    style={{ width: `${uploadProgress}%` }}
-                                  ></div>
-                                </div>
-                                <p className="text-xs text-center mt-1 text-gray-500">
-                                  Uploading via S3: {uploadProgress}%
-                                </p>
+                      ) : (
+                        <Button 
+                          onClick={handlePauseRecording}
+                          variant="outline"
+                          className="flex items-center gap-1"
+                        >
+                          <Pause className="h-4 w-4" />
+                          Pause
+                        </Button>
+                      )}
+                      <Button 
+                        onClick={handleCompleteRecording}
+                        variant="outline"
+                        className="flex items-center gap-1 bg-green-100 hover:bg-green-200"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        Complete
+                      </Button>
+                      <Button 
+                        onClick={handleCancelRecording}
+                        variant="outline" 
+                        className="flex items-center gap-1 bg-red-100 hover:bg-red-200"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+              <CardFooter>
+                <div className="w-full flex justify-center gap-2">
+                  {!isRecording && (
+                    <>
+                      {!audioBlob ? (
+                        <Button 
+                          onClick={() => setIsRecording(true)}
+                          className="bg-[#6152f9] hover:bg-[#3e30b7]"
+                        >
+                          <Mic className="mr-2" />
+                          Start Recording
+                        </Button>
+                      ) : (
+                        <>
+                          {isUploading && (
+                            <div className="w-full mb-2">
+                              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                <div 
+                                  className="bg-[#6152f9] h-2.5 rounded-full transition-all duration-300" 
+                                  style={{ width: `${uploadProgress}%` }}
+                                ></div>
                               </div>
-                            )}
-                            <div className="flex gap-2">
-                              <Button 
-                                onClick={uploadRecording}
-                                disabled={isUploading}
-                                className="bg-[#6152f9] hover:bg-[#3e30b7]"
-                              >
-                                <Upload className="mr-2" />
-                                {isUploading ? "Uploading..." : "Upload Recording"}
-                              </Button>
-                              <Button 
-                                onClick={handleNewRecording}
-                                variant="outline"
-                                className="flex items-center gap-1"
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                                New Recording
-                              </Button>
+                              <p className="text-xs text-center mt-1 text-gray-500">
+                                Uploading via S3: {uploadProgress}%
+                              </p>
                             </div>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </CardFooter>
-              </Card>
-            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <Button 
+                              onClick={uploadRecording}
+                              disabled={isUploading}
+                              className="bg-[#6152f9] hover:bg-[#3e30b7]"
+                            >
+                              <Upload className="mr-2" />
+                              {isUploading ? "Uploading..." : "Upload Recording"}
+                            </Button>
+                            <Button 
+                              onClick={handleNewRecording}
+                              variant="outline"
+                              className="flex items-center gap-1"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                              New Recording
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              </CardFooter>
+            </Card>
           </div>
-        )}
+        </div>
       </main>
       
       <footer className="p-4 text-center text-white/70">

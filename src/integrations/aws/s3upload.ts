@@ -95,7 +95,7 @@ export const testAwsConnection = async (
  * @param file The file blob to upload
  * @param fileName The name to save the file as
  * @param contentType The MIME type of the file
- * @param credentials Optional AWS credentials (if not using environment variables)
+ * @param credentials Optional AWS credentials (if not using hardcoded credentials)
  * @param onProgress Optional callback for tracking upload progress (0-100)
  * @returns The public URL of the uploaded file, or null if upload failed
  */
@@ -103,7 +103,7 @@ export const uploadToS3WithProgress = async (
   file: Blob | File,
   fileName: string,
   contentType: string,
-  credentials?: { accessKeyId: string; secretAccessKey: string; region?: string },
+  credentials?: { accessKeyId: string; secretAccessKey: string; region?: string } | null,
   onProgress?: (progress: number) => void
 ): Promise<string | null> => {
   try {
@@ -115,7 +115,7 @@ export const uploadToS3WithProgress = async (
       contentType
     });
 
-    // Use provided credentials or default client
+    // Use provided credentials or default client with hardcoded credentials
     const client = credentials 
       ? createS3Client(
           credentials.accessKeyId, 
