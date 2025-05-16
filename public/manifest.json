@@ -1,0 +1,24 @@
+
+{
+  "name": "Personal Finance at Your Lips",
+  "short_name": "Finance Voice",
+  "description": "Voice-powered financial assistance",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#6152f9",
+  "theme_color": "#6152f9",
+  "icons": [
+    {
+      "src": "icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
