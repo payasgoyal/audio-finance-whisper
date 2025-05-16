@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Upload, Play, Square, Pause, CheckCircle, XCircle } from "lucide-react";
+import { Mic, MicOff, Upload, Play, Square, Pause, CheckCircle, XCircle, RefreshCw } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "@/components/ui/sonner";
 import AudioRecorder from "@/components/AudioRecorder";
@@ -94,6 +94,25 @@ const Index = () => {
     setIsRecording(false);
   };
 
+  const handleNewRecording = () => {
+    // Clean up previous recording if it exists
+    if (audioRef.current) {
+      if (!audioRef.current.paused) {
+        audioRef.current.pause();
+      }
+      audioRef.current.src = '';
+    }
+    
+    // Reset all recording states
+    setAudioBlob(null);
+    setIsPlaying(false);
+    setIsRecording(false);
+    setIsPaused(false);
+    
+    // Prepare for a new recording
+    toast.info("Ready for a new recording");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#6152f9] to-[#3e30b7] flex flex-col">
       {/* Navigation */}
@@ -133,15 +152,7 @@ const Index = () => {
               Record your personal financial transactions by recording an audio and let our AI analyze your financial habits.
               Just speak for up to 10 seconds and our system will process your audio.
             </p>
-            <div className="hidden md:block">
-              <Button 
-                onClick={() => setIsRecording(true)}
-                disabled={isRecording}
-                className="bg-white text-[#6152f9] hover:bg-white/90"
-              >
-                EXPLORE
-              </Button>
-            </div>
+            {/* Removed the explore button */}
           </div>
 
           {/* Right Content - Audio Recorder Card */}
@@ -229,7 +240,7 @@ const Index = () => {
                 </div>
               </CardContent>
               <CardFooter>
-                <div className="w-full flex justify-center">
+                <div className="w-full flex justify-center gap-2">
                   {!isRecording && (
                     <>
                       {!audioBlob ? (
@@ -241,14 +252,24 @@ const Index = () => {
                           Start Recording
                         </Button>
                       ) : (
-                        <Button 
-                          onClick={uploadRecording}
-                          disabled={isUploading}
-                          className="bg-[#6152f9] hover:bg-[#3e30b7]"
-                        >
-                          <Upload className="mr-2" />
-                          {isUploading ? "Uploading..." : "Upload Recording"}
-                        </Button>
+                        <>
+                          <Button 
+                            onClick={uploadRecording}
+                            disabled={isUploading}
+                            className="bg-[#6152f9] hover:bg-[#3e30b7]"
+                          >
+                            <Upload className="mr-2" />
+                            {isUploading ? "Uploading..." : "Upload Recording"}
+                          </Button>
+                          <Button 
+                            onClick={handleNewRecording}
+                            variant="outline"
+                            className="flex items-center gap-1"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            New Recording
+                          </Button>
+                        </>
                       )}
                     </>
                   )}
