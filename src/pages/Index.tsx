@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Upload, Play, Stop } from "lucide-react";
+import { Mic, MicOff, Upload, Play, Square } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "@/components/ui/sonner";
 import AudioRecorder from "@/components/AudioRecorder";
@@ -144,7 +144,7 @@ const Index = () => {
                         variant="outline"
                         className="flex items-center gap-2"
                       >
-                        {isPlaying ? <Stop /> : <Play />}
+                        {isPlaying ? <Square /> : <Play />}
                         {isPlaying ? "Stop" : "Play Recording"}
                       </Button>
                     </div>
