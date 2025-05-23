@@ -9,17 +9,17 @@ export const S3_CONFIG = {
 // Bucket name
 export const BUCKET_NAME = 'personal-finance-audio-files';
 
-// Hardcoded AWS credentials (for learning purposes only)
+// AWS credentials from environment variables
 const AWS_CREDENTIALS = {
-  accessKeyId: 'AKIAWH2QMV5DRJRFD255',
-  secretAccessKey: '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',
+  accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY,
+  secretAccessKey: import.meta.env.VITE_AWS_SECRET_KEY,
 };
 
 // Log configuration for debugging
 console.log('Initializing AWS S3 client with config:', {
   region: S3_CONFIG.region,
   bucket: BUCKET_NAME,
-  hasCredentials: true, // We now have hardcoded credentials
+  hasCredentials: !!AWS_CREDENTIALS.accessKeyId && !!AWS_CREDENTIALS.secretAccessKey,
 });
 
 // Create S3 client instance with custom credentials
@@ -33,7 +33,7 @@ export const createS3Client = (accessKeyId: string, secretAccessKey: string, reg
   });
 };
 
-// Default client with hardcoded credentials
+// Default client with environment variable credentials
 export const s3Client = new S3Client({
   region: S3_CONFIG.region,
   credentials: {

@@ -17,6 +17,8 @@ const Index = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [transcribedText, setTranscribedText] = useState<string | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleAudioRecorded = (blob: Blob) => {
@@ -54,6 +56,7 @@ const Index = () => {
     }
 
     setIsUploading(true);
+    setTranscribedText(null);
     try {
       // Import AWS S3 upload functions
       const { uploadToS3WithProgress, generateUniqueFilename, testAwsConnection } = await import('@/integrations/aws/s3upload');
@@ -104,11 +107,13 @@ const Index = () => {
       setUploadedFileUrl(publicUrl);
       
       toast.success("Recording uploaded successfully to AWS S3", {
-        description: "Audio file is now accessible via URL"
+        description: "Now transcribing the audio..."
       });
       
       console.log("File uploaded to AWS S3. Public URL:", publicUrl);
       
+      // Commented out n8n webhook
+      /*
       // Send to webhook
       const formData = new FormData();
       // Only sending the URL to the webhook, not the file itself
@@ -124,11 +129,211 @@ const Index = () => {
       } else {
         console.warn(`Webhook call failed with status: ${response.status}`);
       }
+      */
+      
+      // Start transcription process
+      await transcribeAudio(audioBlob, fileName);
+      
     } catch (error) {
       console.error("Upload error:", error);
       toast.error("Failed to upload recording to AWS S3");
     } finally {
       setIsUploading(false);
+    }
+  };
+  
+  // Function to transcribe audio using the local Whisper API
+  const transcribeAudio = async (audioBlob: Blob, fileName: string) => {
+    try {
+      setIsTranscribing(true);
+      toast.info("Transcribing audio...");
+      
+      // Create a form data object with the audio blob
+      const formData = new FormData();
+      
+      // Create an actual File object from the Blob
+      const file = new File([audioBlob], fileName, { type: 'audio/wav' });
+      formData.append("file", file);
+      
+      // Log the form data to verify content
+      console.log("FormData created:", {
+        fieldName: "file",
+        fileName: fileName,
+        fileType: file.type,
+        fileSize: file.size
+      });
+      
+      //console.log("Checking if Whisper API is available...");
+      
+      // Try to ping the server first to see if it's running
+      //let isServerRunning = false;
+      // const urlsToCheck = [
+      //   "http://localhost:8000",
+      //   "http://127.0.0.1:8000",
+      //   "http://0.0.0.0:8000"
+      // ];
+      
+      // for (const url of urlsToCheck) {
+      //   try {
+      //     console.log(`Pinging ${url}...`);
+      //     // Use a HEAD request to check if server is responding
+      //     const pingResponse = await fetch(url, { 
+      //       method: 'HEAD',
+      //       // Add a timeout to avoid waiting too long
+      //       signal: AbortSignal.timeout(3000)
+      //     });
+          
+      //     if (pingResponse.ok) {
+      //       console.log(`Server is running at ${url}`);
+      //       isServerRunning = true;
+      //       break;
+      //     }
+      //   } catch (err) {
+      //     console.warn(`Could not connect to ${url}:`, err);
+      //   }
+      // }
+      
+      // if (!isServerRunning) {
+      //   throw new Error("Could not connect to the Whisper API server. Please ensure it's running on http://localhost:8000");
+      // }
+      
+      console.log("Calling transcribe API...");
+      
+      try {
+        // Call the transcribe API endpoint
+        console.log("Sending POST request to: http://localhost:8000/transcribe/");
+        
+        // Try different localhost URLs if the main one fails
+        let transcribeResponse;
+        let error;
+        
+        // Try different URLs in sequence
+        const urlsToTry = [
+          "http://localhost:8000/transcribe/",
+          "http://127.0.0.1:8000/transcribe/",
+          "http://0.0.0.0:8000/transcribe/"
+        ];
+        
+        let workingBaseUrl = '';
+        
+        for (const url of urlsToTry) {
+          try {
+            console.log(`Attempting to connect to ${url}`);
+            transcribeResponse = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "multipart/form-data"
+              },
+              body: formData,
+            });
+            
+            console.log(`Response from ${url}:`, transcribeResponse.status, transcribeResponse.statusText);
+            
+            if (transcribeResponse.ok) {
+              console.log(`Successfully connected to ${url}`);
+              // Extract the base URL for future use
+              workingBaseUrl = url.split('/transcribe/')[0];
+              console.log(`Using base URL: ${workingBaseUrl}`);
+              break; // Success! Exit the loop
+            } else {
+              throw new Error(`Request to ${url} failed with status: ${transcribeResponse.status}`);
+            }
+          } catch (err) {
+            console.error(`Error connecting to ${url}:`, err);
+            error = err;
+            // Continue to the next URL
+          }
+        }
+        
+        // If we exhausted all URLs and still don't have a response
+        if (!transcribeResponse || !transcribeResponse.ok) {
+          throw new Error(`Failed to connect to any transcription endpoints. Last error: ${error?.message || 'Unknown error'}`);
+        }
+        
+        const transcribeData = await transcribeResponse.json();
+        console.log("Transcribe API response:", transcribeData);
+        
+        // Get the job ID from the response
+        const jobId = transcribeData.job_id;
+        if (!jobId) {
+          throw new Error("No job ID returned from transcription service");
+        }
+        
+        console.log(`Received job ID: ${jobId}`);
+        toast.info(`Transcription started with job ID: ${jobId}`, {
+          description: "Fetching results..."
+        });
+        
+        // Poll for results
+        let attempts = 0;
+        const maxAttempts = 10;
+        const pollingInterval = 2000; // 2 seconds
+        
+        const pollForResults = async () => {
+          attempts++;
+          try {
+            console.log(`Polling for results (attempt ${attempts})...`);
+            
+            // Use the same base URL that worked for the transcription request
+            const resultUrl = `${workingBaseUrl}/result/${jobId}`;
+            console.log(`Fetching results from: ${resultUrl}`);
+            
+            const resultResponse = await fetch(resultUrl, {
+              method: "GET",
+              headers: {
+                "Accept": "application/json"
+              }
+            });
+            
+            if (!resultResponse.ok) {
+              throw new Error(`Result request failed with status: ${resultResponse.status}`);
+            }
+            
+            const resultData = await resultResponse.json();
+            console.log("Result API response:", resultData);
+            
+            if (resultData.status === "completed" && resultData.text) {
+              // Transcription is complete
+              setTranscribedText(resultData.text);
+              setIsTranscribing(false);
+              toast.success("Transcription completed!");
+              return;
+            } else if (resultData.status === "processing" && attempts < maxAttempts) {
+              // Still processing, try again after delay
+              setTimeout(pollForResults, pollingInterval);
+            } else if (attempts >= maxAttempts) {
+              // Too many attempts, giving up
+              setIsTranscribing(false);
+              toast.error("Transcription timeout. Please try again later.");
+            } else {
+              // Unknown status
+              setIsTranscribing(false);
+              toast.error(`Transcription failed with status: ${resultData.status}`);
+            }
+          } catch (error) {
+            console.error("Error polling for results:", error);
+            if (attempts < maxAttempts) {
+              // Retry on error
+              setTimeout(pollForResults, pollingInterval);
+            } else {
+              setIsTranscribing(false);
+              toast.error("Failed to get transcription results");
+            }
+          }
+        };
+        
+        // Start polling
+        await pollForResults();
+        
+      } catch (error) {
+        console.error("Error in transcribe API call:", error);
+        throw error;
+      }
+      
+    } catch (error) {
+      console.error("Transcription error:", error);
+      setIsTranscribing(false);
+      toast.error("Failed to transcribe audio");
     }
   };
 
@@ -167,6 +372,7 @@ const Index = () => {
     setIsPaused(false);
     setUploadedFileUrl(null);
     setUploadProgress(0);
+    setTranscribedText(null);
     
     // Prepare for a new recording
     toast.info("Ready for a new recording");
@@ -177,6 +383,14 @@ const Index = () => {
       navigator.clipboard.writeText(uploadedFileUrl)
         .then(() => toast.success("URL copied to clipboard"))
         .catch(() => toast.error("Failed to copy URL"));
+    }
+  };
+  
+  const copyTranscriptionToClipboard = () => {
+    if (transcribedText) {
+      navigator.clipboard.writeText(transcribedText)
+        .then(() => toast.success("Transcription copied to clipboard"))
+        .catch(() => toast.error("Failed to copy transcription"));
     }
   };
 
@@ -282,6 +496,27 @@ const Index = () => {
                     </div>
                   )}
                   
+                  {/* Show transcribed text */}
+                  {transcribedText && (
+                    <div className="w-full flex flex-col gap-2">
+                      <p className="text-sm text-gray-500 font-medium">Transcription result:</p>
+                      <div className="flex flex-col gap-2">
+                        <div className="p-3 bg-gray-50 rounded-md text-sm font-mono">
+                          {transcribedText}
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={copyTranscriptionToClipboard}
+                          className="self-end"
+                        >
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copy Text
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
                   <AudioRecorder
                     isRecording={isRecording}
                     setIsRecording={setIsRecording}
@@ -346,27 +581,33 @@ const Index = () => {
                         </Button>
                       ) : (
                         <>
-                          {isUploading && (
+                          {(isUploading || isTranscribing) && (
                             <div className="w-full mb-2">
                               <div className="w-full bg-gray-200 rounded-full h-2.5">
                                 <div 
                                   className="bg-[#6152f9] h-2.5 rounded-full transition-all duration-300" 
-                                  style={{ width: `${uploadProgress}%` }}
+                                  style={{ width: isTranscribing ? '100%' : `${uploadProgress}%` }}
                                 ></div>
                               </div>
                               <p className="text-xs text-center mt-1 text-gray-500">
-                                Uploading via S3: {uploadProgress}%
+                                {isTranscribing 
+                                  ? "Transcribing audio..." 
+                                  : `Uploading via S3: ${uploadProgress}%`}
                               </p>
                             </div>
                           )}
                           <div className="flex gap-2">
                             <Button 
                               onClick={uploadRecording}
-                              disabled={isUploading}
+                              disabled={isUploading || isTranscribing}
                               className="bg-[#6152f9] hover:bg-[#3e30b7]"
                             >
                               <Upload className="mr-2" />
-                              {isUploading ? "Uploading..." : "Upload Recording"}
+                              {isUploading 
+                                ? "Uploading..." 
+                                : isTranscribing 
+                                  ? "Transcribing..." 
+                                  : "Upload & Transcribe"}
                             </Button>
                             <Button 
                               onClick={handleNewRecording}
